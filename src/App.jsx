@@ -6,6 +6,10 @@ import {
   ChevronRight, Send
 } from 'lucide-react';
 import { CreateMLCEngine } from "@mlc-ai/web-llm";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { auth, db } from './firebase';
+import Auth from './components/Auth';
 import { TRANSLATIONS } from './translations';
 
 // --- CONSTANTS & LOGIC ---
@@ -406,7 +410,15 @@ const AiChatTab = ({ t, results }) => {
   );
 };
 
-const MineTab = ({ results, t }) => {
+const MineTab = ({ results, t, user }) => {
+  if (!user) {
+    return (
+      <div className="p-6 pb-24 min-h-screen flex flex-col justify-center">
+        <Auth t={t} />
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 pb-24">
        <div className="flex items-center gap-4 mb-8">
@@ -416,8 +428,8 @@ const MineTab = ({ results, t }) => {
              </div>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">{t.ui.user_name || "星尘用户"}</h1>
-            <p className="text-sm text-slate-400">ID: 882910</p>
+            <h1 className="text-xl font-bold text-white">{user.email.split('@')[0]}</h1>
+            <p className="text-sm text-slate-400">ID: {user.uid.slice(0, 6)}</p>
             <span className="inline-block mt-2 text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30">{t.ui.premium || "高级会员"}</span>
           </div>
        </div>
@@ -427,17 +439,17 @@ const MineTab = ({ results, t }) => {
             <span className="text-slate-300">{t.ui.my_reports || "我的报告"}</span>
             <span className="text-white font-bold">{Object.values(results.self).filter(Boolean).length}</span>
          </div>
+         {/* Placeholder stats */}
          <div className="glass-card p-4 rounded-xl flex items-center justify-between">
             <span className="text-slate-300">{t.ui.saved_tests || "收藏的测试"}</span>
             <span className="text-white font-bold">2</span>
          </div>
-         <div className="glass-card p-4 rounded-xl flex items-center justify-between">
-            <span className="text-slate-300">{t.ui.coins || "星币"}</span>
-            <span className="text-gold-400 font-bold">120</span>
-         </div>
        </div>
 
        <div className="mt-8 space-y-2">
+         <button onClick={() => signOut(auth)} className="w-full text-left p-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 transition-colors border border-red-500/20">
+            {t.ui.logout || "退出登录"}
+         </button>
          <button className="w-full text-left p-4 rounded-xl hover:bg-white/5 text-slate-300 transition-colors">{t.ui.settings || "设置"}</button>
          <button className="w-full text-left p-4 rounded-xl hover:bg-white/5 text-slate-300 transition-colors">{t.ui.help || "帮助与支持"}</button>
          <button className="w-full text-left p-4 rounded-xl hover:bg-white/5 text-slate-300 transition-colors">{t.ui.about || "关于"}</button>
@@ -454,6 +466,7 @@ export default function AttachmentTest() {
   const [language, setLanguage] = useState('zh-CN'); // Default to Chinese
   const [screen, setScreen] = useState('intro'); // Start at intro directly
   const [activeTab, setActiveTab] = useState('home');
+  const [user, setUser] = useState(null);
 
   const [answers, setAnswers] = useState({});
   const [currentQIndex, setCurrentQIndex] = useState(0);
@@ -476,8 +489,31 @@ export default function AttachmentTest() {
   const t = TRANSLATIONS[language] || TRANSLATIONS['zh-CN']; // Fallback to zh-CN
 
   useEffect(() => {
-      // Force language to zh-CN if needed, but state init handles it.
-      // Skipping language selection screen as per "All interfaces Chinese"
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        // Load data
+        try {
+          const docRef = doc(db, "users", currentUser.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+             const data = docSnap.data();
+             if (data.results) {
+               setResults(data.results);
+             }
+          }
+        } catch(e) {
+          console.error("Error loading data:", e);
+        }
+      } else {
+        // Reset results on logout or keep local? Resetting is safer for shared devices.
+        setResults({
+            self: { attachment: null, love_style: null, reconciliation: null },
+            partner: { attachment: null }
+        });
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   // Helpers
@@ -581,13 +617,23 @@ export default function AttachmentTest() {
         resultData = { typeKey, score: total };
     }
 
-    setResults(prev => ({
-        ...prev,
-        [assessmentMode]: {
-            ...prev[assessmentMode],
-            [testType]: resultData
+    setResults(prev => {
+        const newResults = {
+            ...prev,
+            [assessmentMode]: {
+                ...prev[assessmentMode],
+                [testType]: resultData
+            }
+        };
+
+        // Save to Firestore if logged in
+        if (user) {
+            setDoc(doc(db, "users", user.uid), { results: newResults }, { merge: true })
+              .catch(e => console.error("Error saving result:", e));
         }
-    }));
+
+        return newResults;
+    });
     setScreen('result');
   };
 
@@ -824,7 +870,7 @@ export default function AttachmentTest() {
           )}
           {activeTab === 'community' && <CommunityTab t={t} />}
           {activeTab === 'ai' && <AiChatTab t={t} results={results} />}
-          {activeTab === 'mine' && <MineTab results={results} t={t} />}
+          {activeTab === 'mine' && <MineTab results={results} t={t} user={user} />}
 
           <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} t={t} />
       </div>
