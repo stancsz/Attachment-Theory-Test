@@ -212,9 +212,9 @@ const CommunityTab = ({ t }) => {
   );
 };
 
-const AiChatTab = ({ t }) => {
+const AiChatTab = ({ t, results }) => {
   const [messages, setMessages] = useState([
-    { id: 1, sender: 'bot', text: t.ui.ai_intro || "你好，旅人。我是达摩，你的内心宇宙向导。今天感觉如何？" }
+    { id: 1, sender: 'bot', text: t.ui.ai_intro || "你好，旅人。我是子期，你的内心宇宙向导。今天感觉如何？" }
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -245,6 +245,33 @@ const AiChatTab = ({ t }) => {
     initEngine();
   }, []);
 
+  const generateSystemPrompt = () => {
+      let prompt = `你叫子期。你是一个善解人意的情感咨询师，语气温柔、富有同理心。请根据用户的测试结果和问题，提供有针对性的建议和安慰。
+用户的信息如下：
+`;
+      if (results?.self?.attachment) {
+          const r = results.self.attachment;
+          prompt += `- 依恋类型: ${t.types[r.typeKey].name} (焦虑分: ${r.anxietyScore}, 回避分: ${r.avoidanceScore})\n`;
+      }
+      if (results?.self?.loveStyle) {
+          const r = results.self.loveStyle;
+          prompt += `- 爱情原型: ${t.types_love_style[r.typeKey].name}\n`;
+      }
+      if (results?.self?.reconciliation) {
+          const r = results.self.reconciliation;
+          prompt += `- 复合概率: ${t.types_reconciliation[r.typeKey].name}\n`;
+      }
+      if (results?.partner?.attachment) {
+          const r = results.partner.attachment;
+          prompt += `- 伴侣依恋类型: ${t.types[r.typeKey].name}\n`;
+      }
+
+      prompt += `
+请在回答中自然地结合这些信息，帮助用户更好地了解自己和关系。不要机械地列出分数，而是通过对话引导用户。
+`;
+      return prompt;
+  };
+
   const handleSend = async () => {
     if(!input.trim()) return;
     if (!engine) return;
@@ -254,9 +281,12 @@ const AiChatTab = ({ t }) => {
     setInput("");
     setIsLoading(true);
 
+    const systemPrompt = generateSystemPrompt();
+
     try {
         const reply = await engine.chat.completions.create({
             messages: [
+                { role: "system", content: systemPrompt },
                 ...messages.filter(m => m.id !== 1).map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text })),
                 { role: "user", content: input }
             ],
@@ -744,7 +774,7 @@ export default function AttachmentTest() {
              />
           )}
           {activeTab === 'community' && <CommunityTab t={t} />}
-          {activeTab === 'ai' && <AiChatTab t={t} />}
+          {activeTab === 'ai' && <AiChatTab t={t} results={results} />}
           {activeTab === 'mine' && <MineTab results={results} t={t} />}
 
           <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} t={t} />
