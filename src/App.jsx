@@ -80,7 +80,7 @@ const QuadrantChart = ({ anxietyScore, avoidanceScore, t }) => {
 
 // --- NEW TABS ---
 
-const HomeTab = ({ t, handleStart, results, setScreen, setLibraryTab, setSelectedLibraryType }) => {
+const HomeTab = ({ t, handleStart, handleTestClick, results, setScreen, setLibraryTab, setSelectedLibraryType }) => {
   return (
     <div className="p-6 space-y-8 pb-24 animate-fade-in">
       {/* Header */}
@@ -97,7 +97,7 @@ const HomeTab = ({ t, handleStart, results, setScreen, setLibraryTab, setSelecte
       </div>
 
       {/* Main Card */}
-      <div className="glass-card rounded-2xl p-6 relative overflow-hidden group cursor-pointer transition-all hover:bg-white/15" onClick={() => handleStart('self', 'attachment')}>
+      <div className="glass-card rounded-2xl p-6 relative overflow-hidden group cursor-pointer transition-all hover:bg-white/15" onClick={() => handleTestClick('self', 'attachment')}>
         <div className="absolute top-0 right-0 p-4 opacity-50">
           <Sparkles className="w-24 h-24 text-purple-500/20 rotate-12" />
         </div>
@@ -108,7 +108,7 @@ const HomeTab = ({ t, handleStart, results, setScreen, setLibraryTab, setSelecte
           <h2 className="text-xl font-bold text-white mb-2">{t.ui.title}</h2>
           <p className="text-slate-300 text-sm mb-4 line-clamp-2">{t.ui.subtitle}</p>
           <div className="flex items-center gap-2 text-gold-400 text-sm font-medium group-hover:gap-3 transition-all">
-            <span>{results.self.attachment ? (t.ui.retake_test || '重新测试') : (t.ui.start_test || '开始测试')}</span>
+            <span>{results.self.attachment ? (t.ui.view_result || '查看结果') : (t.ui.start_test || '开始测试')}</span>
             <ArrowRight className="w-4 h-4" />
           </div>
         </div>
@@ -117,7 +117,7 @@ const HomeTab = ({ t, handleStart, results, setScreen, setLibraryTab, setSelecte
       {/* Secondary Cards Grid */}
       <div className="grid grid-cols-2 gap-4">
         {/* Love Style */}
-        <div className="glass-card rounded-2xl p-4 relative overflow-hidden group cursor-pointer hover:bg-white/15" onClick={() => handleStart('self', 'love_style')}>
+        <div className="glass-card rounded-2xl p-4 relative overflow-hidden group cursor-pointer hover:bg-white/15" onClick={() => handleTestClick('self', 'love_style')}>
            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center mb-3 shadow-lg shadow-pink-500/30">
               <Palette className="w-5 h-5 text-white" />
            </div>
@@ -127,7 +127,7 @@ const HomeTab = ({ t, handleStart, results, setScreen, setLibraryTab, setSelecte
         </div>
 
         {/* Partner Test */}
-        <div className="glass-card rounded-2xl p-4 relative overflow-hidden group cursor-pointer hover:bg-white/15" onClick={() => handleStart('partner', 'attachment')}>
+        <div className="glass-card rounded-2xl p-4 relative overflow-hidden group cursor-pointer hover:bg-white/15" onClick={() => handleTestClick('partner', 'attachment')}>
            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center mb-3 shadow-lg shadow-cyan-500/30">
               <Users className="w-5 h-5 text-white" />
            </div>
@@ -212,9 +212,9 @@ const CommunityTab = ({ t }) => {
   );
 };
 
-const AiChatTab = ({ t }) => {
+const AiChatTab = ({ t, results }) => {
   const [messages, setMessages] = useState([
-    { id: 1, sender: 'bot', text: t.ui.ai_intro || "你好，旅人。我是达摩，你的内心宇宙向导。今天感觉如何？" }
+    { id: 1, sender: 'bot', text: t.ui.ai_intro || "你好，旅人。我是子期，你的内心宇宙向导。今天感觉如何？" }
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -245,20 +245,63 @@ const AiChatTab = ({ t }) => {
     initEngine();
   }, []);
 
-  const handleSend = async () => {
-    if(!input.trim()) return;
-    if (!engine) return;
+  const generateSystemPrompt = () => {
+      let prompt = `你叫子期。你是一位极具同理心、温柔且专业的心理咨询师。你的目标是成为用户心灵的树洞和向导。
+请遵循以下原则：
+1. **共情与倾听**：首先确认和接纳用户的情绪。使用“我感觉到你现在很...”或“这听起来真的很难受”等句式。
+2. **引导而非说教**：不要直接丢出一大段理论。通过提问引导用户自我探索。例如：“这让你想起了什么吗？”或“如果...你会怎么做？”
+3. **人性化对话**：像朋友一样交谈，避免机械的列表（1. 2. 3.）。回答要简短精炼，不要长篇大论。
+4. **结合测试结果**：利用用户的信息（如依恋类型）来解释他们的感受，但不要像读报告一样。
 
-    const userMsg = { id: Date.now(), sender: 'user', text: input };
+用户的信息如下：
+`;
+      if (results?.self?.attachment) {
+          const r = results.self.attachment;
+          prompt += `- 依恋类型: ${t.types[r.typeKey].name} (焦虑分: ${r.anxietyScore}, 回避分: ${r.avoidanceScore})\n`;
+      }
+      if (results?.self?.loveStyle) {
+          const r = results.self.loveStyle;
+          prompt += `- 爱情原型: ${t.types_love_style[r.typeKey].name}\n`;
+      }
+      if (results?.self?.reconciliation) {
+          const r = results.self.reconciliation;
+          prompt += `- 复合概率: ${t.types_reconciliation[r.typeKey].name}\n`;
+      }
+      if (results?.partner?.attachment) {
+          const r = results.partner.attachment;
+          prompt += `- 伴侣依恋类型: ${t.types[r.typeKey].name}\n`;
+      }
+
+      prompt += `
+请时刻保持温柔、包容的语调。你的名字是子期。
+`;
+      return prompt;
+  };
+
+  const handleSend = async (textOverride = null) => {
+    const textToSend = textOverride || input;
+    if(!textToSend.trim()) return;
+    // Removed engine check to allow UI testing without engine loaded, but in prod keep it.
+    // For now, let's keep it safe but allow input clearing.
+    if (!engine) {
+       // Ideally show a toast, but here just log
+       console.log("Engine not loaded yet");
+       return;
+    }
+
+    const userMsg = { id: Date.now(), sender: 'user', text: textToSend };
     setMessages(prev => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
 
+    const systemPrompt = generateSystemPrompt();
+
     try {
         const reply = await engine.chat.completions.create({
             messages: [
+                { role: "system", content: systemPrompt },
                 ...messages.filter(m => m.id !== 1).map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text })),
-                { role: "user", content: input }
+                { role: "user", content: textToSend }
             ],
         });
         const botText = reply.choices[0].message.content;
@@ -270,6 +313,14 @@ const AiChatTab = ({ t }) => {
         setIsLoading(false);
     }
   };
+
+  const suggestions = [
+      "解读我的测试结果",
+      "我和伴侣总是吵架",
+      "如何建立安全感",
+      "感觉没人理解我",
+      "对方是回避型怎么办"
+  ];
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -285,7 +336,7 @@ const AiChatTab = ({ t }) => {
            </div>
         </div>
         <div>
-           <h2 className="font-bold text-white">{t.ui.ai_title || "AI 达摩"}</h2>
+           <h2 className="font-bold text-white">{t.ui.ai_title || "子期"}</h2>
            <div className="flex items-center gap-1 text-[10px] text-green-400">
              <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span> {t.ui.online || "在线"}
            </div>
@@ -320,8 +371,22 @@ const AiChatTab = ({ t }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
+      {/* Input Area */}
       <div className="p-4 border-t border-white/10 bg-slate-900/50 backdrop-blur-md">
+         {/* Suggestion Chips */}
+         <div className="flex gap-2 overflow-x-auto pb-3 mb-1 no-scrollbar">
+            {suggestions.map((s, i) => (
+                <button
+                    key={i}
+                    onClick={() => handleSend(s)}
+                    disabled={!engine || isLoading}
+                    className="whitespace-nowrap px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs text-slate-300 transition-colors disabled:opacity-50"
+                >
+                    {s}
+                </button>
+            ))}
+         </div>
+
          <div className="relative">
            <input
              type="text"
@@ -332,7 +397,7 @@ const AiChatTab = ({ t }) => {
              disabled={!engine || isLoading}
              className="w-full bg-white/5 border border-white/10 rounded-full py-3 pl-4 pr-12 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors placeholder:text-slate-600 disabled:opacity-50"
            />
-           <button onClick={handleSend} disabled={!engine || isLoading} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white hover:bg-indigo-500 transition-colors disabled:opacity-50">
+           <button onClick={() => handleSend()} disabled={!engine || isLoading} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white hover:bg-indigo-500 transition-colors disabled:opacity-50">
               <Send className="w-4 h-4" />
            </button>
          </div>
@@ -444,6 +509,16 @@ export default function AttachmentTest() {
     setCurrentQIndex(0);
     setAnswers({});
     setSelectedOption(null);
+  };
+
+  const handleTestClick = (mode, type) => {
+      if (results[mode] && results[mode][type]) {
+          setAssessmentMode(mode);
+          setTestType(type);
+          setScreen('result');
+      } else {
+          handleStart(mode, type);
+      }
   };
 
   const handleAnswer = (value) => {
@@ -665,6 +740,9 @@ export default function AttachmentTest() {
 
             {/* Actions */}
             <div className="space-y-3">
+               <button onClick={() => handleStart(assessmentMode, testType)} className="w-full glass-btn py-3 rounded-xl text-white font-semibold bg-white/5 border border-white/10">
+                  {t.ui.retake_test || "重新测试"}
+               </button>
                <button onClick={() => setScreen('intro')} className="w-full glass-btn py-3 rounded-xl text-white font-semibold">
                   {t.ui.back || "返回"}
                </button>
@@ -737,6 +815,7 @@ export default function AttachmentTest() {
              <HomeTab
                t={t}
                handleStart={handleStart}
+               handleTestClick={handleTestClick}
                results={results}
                setScreen={setScreen}
                setLibraryTab={setLibraryTab}
@@ -744,7 +823,7 @@ export default function AttachmentTest() {
              />
           )}
           {activeTab === 'community' && <CommunityTab t={t} />}
-          {activeTab === 'ai' && <AiChatTab t={t} />}
+          {activeTab === 'ai' && <AiChatTab t={t} results={results} />}
           {activeTab === 'mine' && <MineTab results={results} t={t} />}
 
           <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} t={t} />
