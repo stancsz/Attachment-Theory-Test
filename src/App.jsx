@@ -221,38 +221,10 @@ const CommunityTab = ({ t }) => {
   );
 };
 
-const AiChatTab = ({ t, results }) => {
-  const [messages, setMessages] = useState([
-    { id: 1, sender: 'bot', text: t.ui.ai_intro || "你好，旅人。我是子期，你的内心宇宙向导。今天感觉如何？" }
-  ]);
+const AiChatTab = ({ t, results, engine, initProgress, messages, setMessages }) => {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [engine, setEngine] = useState(null);
-  const [initProgress, setInitProgress] = useState("");
   const messagesEndRef = useRef(null);
-
-  const selectedModel = "Llama-3.2-1B-Instruct-q4f16_1";
-
-  useEffect(() => {
-    const initEngine = async () => {
-        try {
-            const eng = await CreateMLCEngine(
-                selectedModel,
-                {
-                    initProgressCallback: (progress) => {
-                        setInitProgress(progress.text);
-                    },
-                }
-            );
-            setEngine(eng);
-            setInitProgress("");
-        } catch (error) {
-            console.error("Failed to load engine", error);
-            setInitProgress("Failed to load AI model.");
-        }
-    };
-    initEngine();
-  }, []);
 
   const generateSystemPrompt = () => {
       let prompt = `你叫子期。你是一位极具同理心、温柔且专业的心理咨询师。你的目标是成为用户心灵的树洞和向导。
@@ -514,11 +486,50 @@ export default function AttachmentTest() {
       };
   });
 
+  // AI & Chat State (Lifted)
+  const [engine, setEngine] = useState(null);
+  const [initProgress, setInitProgress] = useState("");
+  // Messages state needs to be initialized with t, but t is derived.
+  // We'll initialize empty and add welcome message in useEffect if empty.
+  const [messages, setMessages] = useState([]);
+
+  const selectedModel = "Llama-3.2-1B-Instruct-q4f16_1";
+
+  useEffect(() => {
+    const initEngine = async () => {
+        try {
+            const eng = await CreateMLCEngine(
+                selectedModel,
+                {
+                    initProgressCallback: (progress) => {
+                        setInitProgress(progress.text);
+                    },
+                }
+            );
+            setEngine(eng);
+            setInitProgress("");
+        } catch (error) {
+            console.error("Failed to load engine", error);
+            setInitProgress("Failed to load AI model.");
+        }
+    };
+    initEngine();
+  }, []);
+
   // Library State
   const [libraryTab, setLibraryTab] = useState('attachment');
   const [selectedLibraryType, setSelectedLibraryType] = useState('SECURE');
 
   const t = TRANSLATIONS[language] || TRANSLATIONS['zh-CN']; // Fallback to zh-CN
+
+  // Initialize chat welcome message if empty
+  useEffect(() => {
+      if (messages.length === 0) {
+          setMessages([
+             { id: 1, sender: 'bot', text: t.ui.ai_intro || "你好，旅人。我是子期，你的内心宇宙向导。今天感觉如何？" }
+          ]);
+      }
+  }, [language]); // Re-run if language changes to update greeting? Maybe not strictly necessary to clear history but good for greeting.
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -950,7 +961,16 @@ export default function AttachmentTest() {
              />
           )}
           {activeTab === 'community' && <CommunityTab t={t} />}
-          {activeTab === 'ai' && <AiChatTab t={t} results={results} />}
+          {activeTab === 'ai' && (
+             <AiChatTab
+               t={t}
+               results={results}
+               engine={engine}
+               initProgress={initProgress}
+               messages={messages}
+               setMessages={setMessages}
+             />
+          )}
           {activeTab === 'mine' && <MineTab results={results} t={t} user={user} />}
 
           <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} t={t} />
