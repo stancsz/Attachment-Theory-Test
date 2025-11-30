@@ -493,7 +493,7 @@ export default function AttachmentTest() {
   // We'll initialize empty and add welcome message in useEffect if empty.
   const [messages, setMessages] = useState([]);
 
-  const selectedModel = "Llama-3.2-1B-Instruct-q4f16_1";
+  const selectedModel = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
 
   useEffect(() => {
     const initEngine = async () => {
